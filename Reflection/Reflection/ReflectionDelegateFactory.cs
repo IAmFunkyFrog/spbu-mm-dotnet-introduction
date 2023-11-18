@@ -21,7 +21,7 @@ public static class ReflectionDelegateFactory
         var propName = props[0];
 
         var prop = type.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) 
-                        ?? throw new ArgumentException(String.Format("{0} is not property in {1} type", propName, type.Name)); // FIXME add possibility to search through private props
+                        ?? throw new ArgumentException(String.Format("{0} is not property in {1} type", propName, type.Name));
 
         if (props.Length == 1) 
         {
