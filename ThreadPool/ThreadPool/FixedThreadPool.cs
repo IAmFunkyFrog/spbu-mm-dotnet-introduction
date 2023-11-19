@@ -1,10 +1,8 @@
-using System.Collections.Concurrent;
-
 namespace ThreadPool;
 
 public class FixedThreadPool : IDisposable
 {
-    private readonly ConcurrentQueue<Action> _tasks;
+    private readonly Queue<Action> _tasks;
     private readonly Thread[] _threads;
     private readonly EventWaitHandle _waitTaskHandle;
     private readonly CancellationTokenSource _cancellationTokenSource;
@@ -24,7 +22,7 @@ public class FixedThreadPool : IDisposable
     public FixedThreadPool(int threadCount)
     {
         _cancellationTokenSource = new CancellationTokenSource();
-        _tasks = new ConcurrentQueue<Action>();
+        _tasks = new Queue<Action>();
         _waitTaskHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
         _threads = new Thread[threadCount];
         for (int i = 0; i < threadCount; i++)
@@ -33,11 +31,15 @@ public class FixedThreadPool : IDisposable
             var thread = new Thread(() =>
             {
                 WaitHandle[] handles = new WaitHandle[] { _waitTaskHandle, token.WaitHandle };
-                while (!token.IsCancellationRequested || !_tasks.IsEmpty)
+                while (!token.IsCancellationRequested || _tasks.Count > 0)
                 {
                     if (!token.IsCancellationRequested) WaitHandle.WaitAny(handles);
 
-                    _tasks.TryDequeue(out Action? task);
+                    Action? task;
+                    lock (_tasks)
+                    {
+                        _tasks.TryDequeue(out task);
+                    }
                     task?.Invoke();
                 }
             });
@@ -50,7 +52,10 @@ public class FixedThreadPool : IDisposable
     {
         ThrowExceptionIfCancellationRequested();
         var packedTask = new MyTask<TResult>(() => task.Invoke(), this);
-        _tasks.Enqueue(() => packedTask.Invoke());
+        lock (_tasks)
+        {
+            _tasks.Enqueue(() => packedTask.Invoke());
+        }
         _waitTaskHandle.Set();
         return packedTask;
     }
