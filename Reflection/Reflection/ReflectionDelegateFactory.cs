@@ -1,46 +1,55 @@
-﻿using System.Reflection;
+﻿using System.Linq.Expressions;
+using System.Reflection;
 
 namespace Reflection;
 public static class ReflectionDelegateFactory
 {
     public static Func<ObjT, object?> MakePropertyAccessor<ObjT>(string path)
     {
-        var accessor = MakePropertyAccessorImpl<object>(typeof(ObjT), path);
-        return obj => accessor.Invoke(obj);
+        var accessor = MakePropertyAccessorLinqImpl<ObjT, object?>(path);
+        return accessor;
     }
 
     public static Func<ObjT, ReturnT?> MakePropertyAccessor<ObjT, ReturnT>(string path)
     {
-        var accessor = MakePropertyAccessorImpl<ReturnT>(typeof(ObjT), path);
-        return obj => accessor.Invoke(obj);
+        var accessor = MakePropertyAccessorLinqImpl<ObjT, ReturnT>(path);
+        return accessor;
     }
 
-    private static Func<object?, ReturnT?> MakePropertyAccessorImpl<ReturnT>(Type type, string path)
+    private static Func<ObjT, ReturnT> MakePropertyAccessorLinqImpl<ObjT, ReturnT>(string path)
     {
+        var param = Expression.Parameter(typeof(ObjT), "obj");
         var props = path.Split(".");
-        var propName = props[0];
 
-        var prop = type.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static) 
-                        ?? throw new ArgumentException(String.Format("{0} is not property in {1} type", propName, type.Name));
-
-        if (props.Length == 1) 
+        Type lastType = typeof(ObjT);
+        Expression access = param;
+        foreach (var prop in props)
         {
-            if(prop.PropertyType.IsAssignableTo(typeof(ReturnT))) return obj => 
+            PropertyInfo? propertyInfo;
+            propertyInfo = lastType.GetProperty(prop, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (propertyInfo != null)
             {
-                return (ReturnT?) prop.GetValue(obj);
-            };
+                access = Expression.Property(access, propertyInfo);
+            }
+            else
+            {
+                // Try find static property if not found instance property
+                propertyInfo = lastType.GetProperty(prop, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                        ?? throw new ArgumentException(String.Format("{0} is not property in {1} type", prop, lastType.Name));
+                access = Expression.Property(null, propertyInfo);
+            }
+            lastType = propertyInfo.PropertyType;
+        }
 
-            throw new ArgumentException(String.Format("{0} property on {1} have not {2} type, it have {3} type",
-                                        path, type.Name, typeof(ReturnT).Name, prop.PropertyType)
+        if (!lastType.IsAssignableTo(typeof(ReturnT)))
+        {
+            throw new ArgumentException(String.Format("{0} property have not {1} type, it have {2} type",
+                                        props[props.Length - 1], typeof(ReturnT).Name, lastType)
             );
         }
 
-        var otherProps = String.Join(".", props.Skip(1).ToArray());
-        var outerAccessor = MakePropertyAccessorImpl<ReturnT>(prop.PropertyType, otherProps);
-
-        return obj =>
-        {
-            return outerAccessor.Invoke(prop.GetValue(obj));
-        };
+        Expression conversion = Expression.Convert(access, typeof(ReturnT));
+        var compiledLambda = Expression.Lambda(typeof(Func<ObjT, ReturnT>), conversion, param).Compile();
+        return (Func<ObjT, ReturnT>)compiledLambda;
     }
 }
