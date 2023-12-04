@@ -33,13 +33,17 @@ public class FixedThreadPool : IDisposable
                 WaitHandle[] handles = new WaitHandle[] { _waitTaskHandle, token.WaitHandle };
                 while (!token.IsCancellationRequested || _tasks.Count > 0)
                 {
-                    if (!token.IsCancellationRequested) WaitHandle.WaitAny(handles);
-
-                    Action? task;
+                    Action? task = null;
                     lock (_tasks)
                     {
                         _tasks.TryDequeue(out task);
                     }
+
+                    if (!token.IsCancellationRequested && task == null) {
+                        WaitHandle.WaitAny(handles);
+                        continue;
+                    }
+
                     task?.Invoke();
                 }
             });
