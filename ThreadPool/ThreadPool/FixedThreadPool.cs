@@ -4,8 +4,9 @@ public class FixedThreadPool : IDisposable
 {
     private readonly Queue<Action> _tasks;
     private readonly Thread[] _threads;
-    private readonly EventWaitHandle _waitTaskHandle;
+    private readonly EventWaitHandle[] _threadTaskWaitHandles;
     private readonly CancellationTokenSource _cancellationTokenSource;
+    private long _passedTaskCount = 0;
     public int SuspendedCount
     {
         get
@@ -23,14 +24,16 @@ public class FixedThreadPool : IDisposable
     {
         _cancellationTokenSource = new CancellationTokenSource();
         _tasks = new Queue<Action>();
-        _waitTaskHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
         _threads = new Thread[threadCount];
+        _threadTaskWaitHandles = new EventWaitHandle[threadCount];
         for (int i = 0; i < threadCount; i++)
         {
+            var waitTaskHandle = new EventWaitHandle(false, EventResetMode.AutoReset);
+            _threadTaskWaitHandles[i] = waitTaskHandle;
             var token = _cancellationTokenSource.Token;
             var thread = new Thread(() =>
             {
-                WaitHandle[] handles = new WaitHandle[] { _waitTaskHandle, token.WaitHandle };
+                WaitHandle[] handles = new WaitHandle[] { waitTaskHandle, token.WaitHandle };
                 while (!token.IsCancellationRequested || _tasks.Count > 0)
                 {
                     Action? task = null;
@@ -60,7 +63,7 @@ public class FixedThreadPool : IDisposable
         {
             _tasks.Enqueue(() => packedTask.Invoke());
         }
-        _waitTaskHandle.Set();
+        _threadTaskWaitHandles[_passedTaskCount++ % _threadTaskWaitHandles.Length].Set();
         return packedTask;
     }
 
@@ -69,7 +72,7 @@ public class FixedThreadPool : IDisposable
         ThrowExceptionIfCancellationRequested();
         var packedTask = new MyTask<object?>(() => task.Invoke(), this);
         _tasks.Enqueue(() => packedTask.Invoke());
-        _waitTaskHandle.Set();
+        _threadTaskWaitHandles[_passedTaskCount++ % _threadTaskWaitHandles.Length].Set();
         return packedTask;
     }
 
