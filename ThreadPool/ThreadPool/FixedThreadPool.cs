@@ -42,7 +42,8 @@ public class FixedThreadPool : IDisposable
                         _tasks.TryDequeue(out task);
                     }
 
-                    if (!token.IsCancellationRequested && task == null) {
+                    if (!token.IsCancellationRequested && task == null)
+                    {
                         WaitHandle.WaitAny(handles);
                         continue;
                     }
@@ -55,24 +56,27 @@ public class FixedThreadPool : IDisposable
         }
     }
 
-    public IMyTask<TResult> Enqueue<TResult>(Func<TResult> task)
+    private void EnqueueImpl<T>(MyTask<T> packedTask)
     {
         ThrowExceptionIfCancellationRequested();
-        var packedTask = new MyTask<TResult>(() => task.Invoke(), this);
         lock (_tasks)
         {
             _tasks.Enqueue(() => packedTask.Invoke());
+            _threadTaskWaitHandles[_passedTaskCount++ % _threadTaskWaitHandles.Length].Set();
         }
-        _threadTaskWaitHandles[_passedTaskCount++ % _threadTaskWaitHandles.Length].Set();
+    }
+
+    public IMyTask<TResult> Enqueue<TResult>(Func<TResult> task)
+    {
+        var packedTask = new MyTask<TResult>(() => task.Invoke(), this);
+        EnqueueImpl(packedTask);
         return packedTask;
     }
 
     public IMyTask<object?> Enqueue(Action task)
     {
-        ThrowExceptionIfCancellationRequested();
         var packedTask = new MyTask<object?>(() => task.Invoke(), this);
-        _tasks.Enqueue(() => packedTask.Invoke());
-        _threadTaskWaitHandles[_passedTaskCount++ % _threadTaskWaitHandles.Length].Set();
+        EnqueueImpl(packedTask);
         return packedTask;
     }
 
