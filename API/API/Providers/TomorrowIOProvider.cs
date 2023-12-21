@@ -15,7 +15,6 @@ namespace API.Providers
 
         public Weather? GetCurrentWeather()
         {
-            //var url = "https://api.tomorrow.io/v4/timelines?";
             var url = Environment.GetEnvironmentVariable("TOMORROW_IO_URL");
 
             var fields = new string[]
@@ -29,9 +28,6 @@ namespace API.Providers
                 "windDirection"
             };
 
-            //var lat = 59.93863;
-            //var lon = 30.31413;
-            //var apikey = "944Ubw2jFtqMUZnVNXWInCkezgNumRK2";
             var lat = Environment.GetEnvironmentVariable("LAT");
             var lon = Environment.GetEnvironmentVariable("LON");
             var apikey = Environment.GetEnvironmentVariable("TOMORROW_IO_API_KEY");

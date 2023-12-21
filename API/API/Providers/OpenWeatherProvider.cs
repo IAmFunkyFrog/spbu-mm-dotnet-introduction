@@ -15,12 +15,8 @@ namespace API.Providers
 
         public Weather? GetCurrentWeather()
         {
-            //var url = "https://api.openweathermap.org/data/2.5/weather?";
             var url = Environment.GetEnvironmentVariable("OPEN_WEATHER_URL");
 
-            //var lat = 59.93863;
-            //var lon = 30.31413;
-            //var apikey = "3f314355f307b0b22f532bc5aaf238e2";
             var lat = Environment.GetEnvironmentVariable("LAT");
             var lon = Environment.GetEnvironmentVariable("LON");
             var apikey = Environment.GetEnvironmentVariable("OPEN_WEATHER_API_KEY");
